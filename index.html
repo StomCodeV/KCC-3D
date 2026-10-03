@@ -1,8 +1,13 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kigali Convention Centre — Digital Twin</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kigali Convention Centre — Digital Twin</title>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#0a0e1a;font:13px system-ui,sans-serif}canvas{display:block}
 .g{position:fixed;color:#fff;background:rgba(18,28,42,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:14px 16px}
-#info{top:14px;left:14px;max-width:290px}#info h1{margin:0 0 4px;font-size:17px}#info p{margin:0;opacity:.85;line-height:1.45}
+#info{top:14px;left:14px;max-width:300px}#info h1{margin:0 0 4px;font-size:17px}#info p{margin:0;opacity:.85;line-height:1.45;font-size:12px}
 #ui{bottom:14px;right:14px;display:flex;flex-direction:column;gap:8px}#ui div{display:flex;gap:6px;flex-wrap:wrap}
 button,select{font:inherit;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:7px 11px;cursor:pointer}select option{color:#000}button.on{background:#00A1DE;border-color:#00A1DE}
 #load{position:fixed;inset:0;background:#0a0e1a;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .8s;z-index:9}#load.h{opacity:0;pointer-events:none}
@@ -17,7 +22,6 @@ button,select{font:inherit;color:#fff;background:rgba(255,255,255,.12);border:1p
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {Sky} from 'three/addons/objects/Sky.js';
-import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 const $=id=>document.getElementById(id),PI=Math.PI,rnd=(a,b)=>a+Math.random()*(b-a),V=(x,y,z)=>new THREE.Vector3(x,y,z);
@@ -28,7 +32,6 @@ const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(
 renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.body.appendChild(renderer.domElement);
 const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0xbcd5e8,.0008);
-scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
 const camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.5,6000);
 const controls=new OrbitControls(camera,renderer.domElement);
 Object.assign(controls,{enableDamping:true,dampingFactor:.06,minDistance:30,maxDistance:600,maxPolarAngle:PI/2.05,autoRotateSpeed:.6});
@@ -58,13 +61,10 @@ add(new THREE.CylinderGeometry(95,145,3,96),M({map:gt2,roughness:1}),0,1.5,0);
 const flat=(g,m,x,y,z)=>{const o=add(g,m,x,y,z);o.rotation.x=-PI/2;o.castShadow=false;return o};
 flat(new THREE.RingGeometry(50,70,128),M({map:pav([40,40]),roughness:.85}),0,Y0+.05,0);
 flat(new THREE.RingGeometry(86,94,128),M({color:0x2c2c2c,roughness:.95}),0,Y0+.06,0);
-flat(new THREE.RingGeometry(78,83,64,1,-PI*.92,PI*.84),M({map:pav([20,2]),roughness:.85}),0,Y0+.08,0);   // curved paved path
+flat(new THREE.RingGeometry(78,83,64,1,-PI*.92,PI*.84),M({map:pav([20,2]),roughness:.85}),0,Y0+.08,0);
 {const w=add(new THREE.PlaneGeometry(9,18),M({map:pav([3,6]),roughness:.85}),0,Y0+.07,78);w.rotation.x=-PI/2;w.castShadow=false}
 const dash=mk(new THREE.BoxGeometry(3,.03,.3),M({color:0xffffff,roughness:.7}),72);
 for(let i=0;i<72;i++){const a=i/72*2*PI;sp(dash,i,90*Math.cos(a),Y0+.1,90*Math.sin(a),1,1,1,null,-(a+PI/2))}
-add(new THREE.BoxGeometry(62,1.5,24),M({color:0x2c2c2c,roughness:.95}),150,.6,-70);
-const bay=mk(new THREE.BoxGeometry(.2,.03,5),M({color:0xffffff}),42);
-for(let r=0;r<2;r++)for(let i=0;i<21;i++)sp(bay,r*21+i,121+i*3,1.37,-70+(r?4.8:-4.8),1,1,1,null,0);
 // ── VEGETATION ──
 await pg(30,'Planting vegetation');
 const avoid=[[-105,28,40],[105,25,40],[150,-70,45]];
@@ -97,7 +97,7 @@ add(new THREE.CylinderGeometry(50.8,50.8,1,128),[conc,M({map:pav([30,30]),roughn
 add(new THREE.BoxGeometry(34,.5,16),steelM,0,Y0+5.2,58);
 for(const x of[-15,-9,-3,3,9,15])add(new THREE.CylinderGeometry(.25,.25,5,8),steelM,x,Y0+2.5,64);
 for(let s=0;s<3;s++)add(new THREE.BoxGeometry(30-s*2,.25,4),conc,0,Y0+.12+s*.25,69-s*1.5);
-// ── DOME: 9 opaque tiers of triangular facets + catwalk ledges ──
+// ── DOME: 9 stacked ETFE bands with deep shadow gaps ──
 await pg(65,'Constructing dome');
 const R=28.5,NT=9,y0=7,Ht=32,tH=Ht/NT,dome=new THREE.Group();dome.position.y=DY;scene.add(dome);
 const E=y=>R*Math.sqrt(Math.max(0,1-Math.pow((y-y0)/Ht/1.04,1.5)));
@@ -114,7 +114,7 @@ for(let i=0;i<NT;i++){const yb=y0+i*tH,rb=E(yb),rt=E(yb+tH)+.6,m=M({color:0xffff
 {const top=y0+Ht,c=new THREE.Mesh(new THREE.CylinderGeometry(E(top)+.6,E(top)+.6,.5,48),steelM);c.position.y=top;dome.add(c);
  const sp1=new THREE.Mesh(new THREE.CylinderGeometry(.07,.4,9,8),steelM);sp1.position.y=top+4.5;sp1.castShadow=true;dome.add(sp1);
  const fn=new THREE.Mesh(new THREE.SphereGeometry(.35,10,8),steelM);fn.position.y=top+9;dome.add(fn)}
-// glazed base drum with V-bracing (opaque reflective glass)
+// glazed base drum with V-bracing
 {const d=new THREE.Mesh(new THREE.CylinderGeometry(29.6,29.6,y0,128),baseM);d.position.y=y0/2;d.castShadow=true;dome.add(d);
  const bg=[],tb=(a,b,r)=>bg.push(new THREE.TubeGeometry(new THREE.LineCurve3(a,b),1,r,5)),dd=2*PI/64,p=(a,y)=>V(29.9*Math.cos(a),y,29.9*Math.sin(a));
  for(let j=0;j<64;j++){const a=j*dd;tb(p(a,0),p(a,y0),.2);if(j%2==0){tb(p(a,0),p(a+dd,5.2),.15);tb(p(a+2*dd,0),p(a+dd,5.2),.15)}}
@@ -160,7 +160,7 @@ function setMode(k){const m=MODES[k];lit=m.lit;
  for(const g of[podM,baseM,winMat])g.emissiveIntensity=lit?1.3:0;
  document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m==k))}
 document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
-// LED facade: photo-accurate flag bands (blue top, yellow mid, green bottom) or 6 s cycle
+// ── LED FACADE ──
 const BL=new THREE.Color(0x1e8cff),YE=new THREE.Color(0xffb81c),GR=new THREE.Color(0x2bd04f),BAND=[GR,GR,GR,YE,YE,YE,BL,BL,BL],CY=[GR,YE,BL],tmp=new THREE.Color();
 function led(now){const T=now/1000%6;
  tierM.forEach((m,i)=>{if(!ledMode)tmp.copy(BAND[i]);else if(T<4.5)tmp.copy([BL,YE,GR][T/1.5|0]);else{const w=(((i/9*3-(T-4.5)*2)%3)+3)%3,f=w|0;tmp.copy(CY[f]).lerp(CY[(f+1)%3],w-f)}
