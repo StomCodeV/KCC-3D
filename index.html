@@ -1,0 +1,184 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kigali Convention Centre — Digital Twin</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#0a0e1a;font:13px system-ui,sans-serif}canvas{display:block}
+.g{position:fixed;color:#fff;background:rgba(18,28,42,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:14px 16px}
+#info{top:14px;left:14px;max-width:290px}#info h1{margin:0 0 4px;font-size:17px}#info p{margin:0;opacity:.85;line-height:1.45}
+#ui{bottom:14px;right:14px;display:flex;flex-direction:column;gap:8px}#ui div{display:flex;gap:6px;flex-wrap:wrap}
+button,select{font:inherit;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:7px 11px;cursor:pointer}select option{color:#000}button.on{background:#00A1DE;border-color:#00A1DE}
+#load{position:fixed;inset:0;background:#0a0e1a;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .8s;z-index:9}#load.h{opacity:0;pointer-events:none}
+#bar{width:220px;height:4px;background:#222;border-radius:2px;overflow:hidden}#bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#00A1DE,#FAD201,#20603D);transition:width .4s}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script></head>
+<body>
+<div id="load"><div style="font-size:18px;letter-spacing:.12em">KIGALI CONVENTION CENTRE</div><div id="bar"><i></i></div><div id="lt" style="opacity:.7">Loading…</div></div>
+<div class="g" id="info"><h1>Kigali Convention Centre</h1><p>Kimihurura Hill, Kigali · Architect Roland Dieterle · 2016. Nine-tier steel dome clad in triangular ETFE facets with a double-helix catwalk, inspired by the royal hut at Nyanza. Radisson Blu (left) and IT Park (right).</p></div>
+<div class="g" id="ui"><div><button data-m="day" class="on">Day</button><button data-m="sunset">Sunset</button><button data-m="dusk">Dusk</button><button data-m="night">Night</button></div><div><select id="cam"></select><button id="led">LED: Flag</button></div><label><input type="checkbox" id="rot"> Auto-rotate</label></div>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {Sky} from 'three/addons/objects/Sky.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+const $=id=>document.getElementById(id),PI=Math.PI,rnd=(a,b)=>a+Math.random()*(b-a),V=(x,y,z)=>new THREE.Vector3(x,y,z);
+const pg=async(n,s)=>{$('bar').firstChild.style.width=n+'%';$('lt').textContent=s;await new Promise(r=>setTimeout(r,40))};
+await pg(5,'Initialising renderer');
+// ── RENDERER / SCENE ──
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0xbcd5e8,.0008);
+scene.environment=new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
+const camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.5,6000);
+const controls=new OrbitControls(camera,renderer.domElement);
+Object.assign(controls,{enableDamping:true,dampingFactor:.06,minDistance:30,maxDistance:600,maxPolarAngle:PI/2.05,autoRotateSpeed:.6});
+const mats=[],M=(o,T=THREE.MeshStandardMaterial)=>{const m=new T(o);m.userData.e=o.envMapIntensity??1;mats.push(m);return m};
+const add=(g,m,x=0,y=0,z=0)=>{const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;scene.add(o);return o};
+const D=new THREE.Object3D(),C=new THREE.Color();
+const mk=(g,m,n)=>{const o=new THREE.InstancedMesh(g,m,n);o.castShadow=o.receiveShadow=true;scene.add(o);return o};
+const sp=(o,i,x,y,z,sx,sy,sz,c,ry=rnd(0,6))=>{D.position.set(x,y,z);D.scale.set(sx,sy,sz);D.rotation.set(0,ry,0);D.updateMatrix();o.setMatrixAt(i,D.matrix);if(c!=null)o.setColorAt(i,C.setHex(c).offsetHSL(rnd(-.015,.015),rnd(-.05,.05),rnd(-.04,.04)))};
+const mkTex=(w,h,fn,rep)=>{const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;if(rep)t.repeat.set(...rep);return t};
+const Y0=3,DY=Y0+6.5,gh=r=>r<95?Y0:r<145?Y0*(145-r)/50:0;
+// ── SKY, CLOUDS, LIGHTS ──
+const sky=new Sky();sky.scale.setScalar(4500);scene.add(sky);const su=sky.material.uniforms;su.mieDirectionalG.value=.8;
+const cloudT=mkTex(512,512,g=>{for(let i=0;i<260;i++){const x=rnd(0,512),y=rnd(0,512),r=rnd(25,90),gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(255,255,255,.22)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(x-r,y-r,2*r,2*r)}},[3,3]);
+const cloudM=new THREE.MeshBasicMaterial({map:cloudT,transparent:true,depthWrite:false,fog:false,opacity:.55});
+const clouds=new THREE.Mesh(new THREE.PlaneGeometry(8000,8000),cloudM);clouds.rotation.x=PI/2;clouds.position.y=1400;scene.add(clouds);
+const sun=new THREE.DirectionalLight(0xfff5e6,3.2);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-120,right:120,top:120,bottom:-120,near:1,far:700});sun.shadow.bias=-.0004;scene.add(sun);
+const hemi=new THREE.HemisphereLight(0x87ceeb,0x3a6b35,.55),amb=new THREE.AmbientLight(0xa0b8d0,.35);scene.add(hemi,amb);
+// ── TERRAIN ──
+await pg(15,'Building terrain');
+const gt=mkTex(256,256,g=>{for(let i=0;i<4;i++){g.fillStyle=i%2?'#4d8a3c':'#5a9847';g.fillRect(0,i*64,256,64)}for(let i=0;i<2500;i++){g.fillStyle=`rgba(${rnd(20,60)|0},${rnd(70,120)|0},30,.18)`;g.fillRect(rnd(0,256),rnd(0,256),2,2)}},[40,40]);
+const gt2=gt.clone();gt2.repeat.set(10,10);gt2.needsUpdate=true;
+const pav=(rep)=>mkTex(256,256,g=>{g.fillStyle='#b9b3a6';g.fillRect(0,0,256,256);for(let x=0;x<256;x+=32)for(let y=0;y<256;y+=32){const s=165+rnd(0,28)|0;g.fillStyle=`rgb(${s},${s-4},${s-12})`;g.fillRect(x+1,y+1,30,30)}},rep);
+add(new THREE.CircleGeometry(400,96),M({map:gt,roughness:1})).rotation.x=-PI/2;
+add(new THREE.CircleGeometry(4000,48),M({color:0x4a6b44,roughness:1}),0,-.2,0).rotation.x=-PI/2;
+add(new THREE.CylinderGeometry(95,145,3,96),M({map:gt2,roughness:1}),0,1.5,0);
+const flat=(g,m,x,y,z)=>{const o=add(g,m,x,y,z);o.rotation.x=-PI/2;o.castShadow=false;return o};
+flat(new THREE.RingGeometry(50,70,128),M({map:pav([40,40]),roughness:.85}),0,Y0+.05,0);
+flat(new THREE.RingGeometry(86,94,128),M({color:0x2c2c2c,roughness:.95}),0,Y0+.06,0);
+flat(new THREE.RingGeometry(78,83,64,1,-PI*.92,PI*.84),M({map:pav([20,2]),roughness:.85}),0,Y0+.08,0);   // curved paved path
+{const w=add(new THREE.PlaneGeometry(9,18),M({map:pav([3,6]),roughness:.85}),0,Y0+.07,78);w.rotation.x=-PI/2;w.castShadow=false}
+const dash=mk(new THREE.BoxGeometry(3,.03,.3),M({color:0xffffff,roughness:.7}),72);
+for(let i=0;i<72;i++){const a=i/72*2*PI;sp(dash,i,90*Math.cos(a),Y0+.1,90*Math.sin(a),1,1,1,null,-(a+PI/2))}
+add(new THREE.BoxGeometry(62,1.5,24),M({color:0x2c2c2c,roughness:.95}),150,.6,-70);
+const bay=mk(new THREE.BoxGeometry(.2,.03,5),M({color:0xffffff}),42);
+for(let r=0;r<2;r++)for(let i=0;i<21;i++)sp(bay,r*21+i,121+i*3,1.37,-70+(r?4.8:-4.8),1,1,1,null,0);
+// ── VEGETATION ──
+await pg(30,'Planting vegetation');
+const avoid=[[-105,28,40],[105,25,40],[150,-70,45]];
+const pick=()=>{for(;;){const a=rnd(0,2*PI),r=rnd(72,200),x=r*Math.cos(a),z=r*Math.sin(a);if((r>76&&r<97)||avoid.some(([ax,az,d])=>Math.hypot(x-ax,z-az)<d))continue;return[x,gh(r),z]}};
+const white=()=>M({color:0xffffff,roughness:.9}),bark=white();
+const aT=mk(new THREE.CylinderGeometry(.25,.5,6,6),bark,50),aC=mk(new THREE.SphereGeometry(1,10,7),white(),250);
+const hero=[[-42,100],[-78,84],[66,112],[92,72]];
+for(let i=0;i<50;i++){let[x,y,z]=pick();if(i<4){[x,z]=hero[i];y=gh(Math.hypot(x,z))}const s=i<4?rnd(1.3,1.6):rnd(.8,1.3);sp(aT,i,x,y+3*s,z,s,s,s,0x5a4130);
+ for(let l=0;l<5;l++){const a=l/5*6.28;sp(aC,i*5+l,x+Math.cos(a)*(l?3.2:0)*s,y+(6.4+rnd(0,.8))*s,z+Math.sin(a)*(l?3.2:0)*s,s*rnd(3.8,5.2),s*1.05,s*rnd(3.8,5.2),0x3f7a2e)}}
+const eT=mk(new THREE.CylinderGeometry(.2,.35,16,6),bark,30),eC=mk(new THREE.SphereGeometry(1,10,7),white(),90);
+for(let i=0;i<30;i++){const[x,y,z]=pick(),s=rnd(.8,1.3);sp(eT,i,x,y+8*s,z,s,s,s,0x8a7a66);for(let l=0;l<3;l++)sp(eC,i*3+l,x+rnd(-.8,.8),y+(12+l*3)*s,z+rnd(-.8,.8),2.2*s,5*s,2.2*s,0x56795a)}
+const ico=new THREE.IcosahedronGeometry(1,1),ip=ico.attributes.position;
+for(let i=0;i<ip.count;i++){const x=ip.getX(i),y=ip.getY(i),z=ip.getZ(i),n=1+.25*Math.sin(x*7.3+y*5.1+z*9.7);ip.setXYZ(i,x*n,y*n,z*n)}ico.computeVertexNormals();
+const shM=M({color:0xffffff,roughness:.95,flatShading:true}),sh=mk(ico,shM,150),fb=mk(ico,shM,60),fl=mk(new THREE.SphereGeometry(1,6,5),M({color:0xffffff,roughness:.6}),360);
+for(let i=0;i<150;i++){const[x,y,z]=pick(),s=rnd(.7,1.4);sp(sh,i,x,y+.5,z,s*1.4,s,s*1.4,0x2d5a27)}
+for(let i=0;i<60;i++){const[x,y,z]=pick(),s=rnd(.9,1.4);sp(fb,i,x,y+.6,z,s*1.3,s,s*1.3,0x2f6a2c);
+ for(let l=0;l<6;l++){const a=rnd(0,2*PI),u=rnd(0,1);sp(fl,i*6+l,x+Math.cos(a)*1.3*s,y+.7*s+u*.9*s,z+Math.sin(a)*1.3*s,.2,.2,.2,[0xd62839,0xff6fa5,0xffd23f][l%3])}}
+for(let i=0;i<12;i++){const a=i/12*2*PI+rnd(-.2,.2),r=rnd(600,1200),h=new THREE.Mesh(new THREE.SphereGeometry(1,12,6,0,2*PI,0,PI/2),M({color:new THREE.Color().setHSL(.3,.35,rnd(.28,.4)),roughness:1,flatShading:true}));h.scale.set(rnd(160,320),rnd(40,90),rnd(160,320));h.position.set(r*Math.cos(a),0,r*Math.sin(a));scene.add(h)}
+const skl=mk(new THREE.BoxGeometry(1,1,1),white(),70);
+for(let i=0;i<70;i++){const a=rnd(.3,1.5),r=rnd(750,950),h=rnd(8,45),w=rnd(12,26);sp(skl,i,r*Math.cos(a),h/2,r*Math.sin(a),w,h,w,0xc8d0d6,a)}
+// ── PODIUM (low, wide, glass-banded) ──
+await pg(50,'Podium & concourse');
+const winTex=(lit,rep)=>mkTex(512,64,(g,w,h)=>{g.fillStyle=lit?'#000':'#9a9a92';g.fillRect(0,0,w,h);
+ for(let i=0;i<16;i++){if(lit){const b=rnd(150,255)|0;g.fillStyle=`rgb(${b},${b*.78|0},${b*.45|0})`}else{const gr=g.createLinearGradient(0,8,0,56);gr.addColorStop(0,'#2d4252');gr.addColorStop(1,'#0e1a24');g.fillStyle=gr}g.fillRect(i*32+2,8,28,48)}},rep);
+const glass=(rep)=>M({color:0xffffff,map:winTex(0,rep),emissive:0xffffff,emissiveMap:winTex(1,rep),emissiveIntensity:0,metalness:.5,roughness:.2});
+const podM=glass([13,1]),baseM=glass([7,1]),conc=M({color:0xc9c6bd,roughness:.85}),steelM=M({color:0xaab2b9,metalness:.85,roughness:.35});
+add(new THREE.CylinderGeometry(50,50,5.5,128),podM,0,Y0+2.75,0);
+add(new THREE.CylinderGeometry(50.8,50.8,1,128),[conc,M({map:pav([30,30]),roughness:.85}),conc],0,Y0+6,0);
+{const t=add(new THREE.TorusGeometry(50.4,.35,6,128),conc,0,Y0+6.9,0);t.rotation.x=PI/2}
+add(new THREE.BoxGeometry(34,.5,16),steelM,0,Y0+5.2,58);
+for(const x of[-15,-9,-3,3,9,15])add(new THREE.CylinderGeometry(.25,.25,5,8),steelM,x,Y0+2.5,64);
+for(let s=0;s<3;s++)add(new THREE.BoxGeometry(30-s*2,.25,4),conc,0,Y0+.12+s*.25,69-s*1.5);
+// ── DOME: 9 opaque tiers of triangular facets + catwalk ledges ──
+await pg(65,'Constructing dome');
+const R=28.5,NT=9,y0=7,Ht=32,tH=Ht/NT,dome=new THREE.Group();dome.position.y=DY;scene.add(dome);
+const E=y=>R*Math.sqrt(Math.max(0,1-Math.pow((y-y0)/Ht/1.04,1.5)));
+const facet=mkTex(128,64,(g,w,h)=>{g.fillStyle='#c9d3d9';g.fillRect(0,0,w,h);g.fillStyle='#f2f7fa';g.beginPath();g.moveTo(0,h);g.lineTo(w/2,0);g.lineTo(w,h);g.fill();
+ g.strokeStyle='#5f6b75';g.lineWidth=3;g.beginPath();g.moveTo(0,h);g.lineTo(w/2,0);g.lineTo(w,h);g.moveTo(0,1);g.lineTo(w,1);g.moveTo(0,h-1);g.lineTo(w,h-1);g.stroke()},[48,1]);
+const ledgeM=M({color:0xe8edf0,metalness:.6,roughness:.3,emissive:0xffffff,emissiveIntensity:0}),railP=[];
+const tierM=[];
+for(let i=0;i<NT;i++){const yb=y0+i*tH,rb=E(yb),rt=E(yb+tH)+.6,m=M({color:0xffffff,map:facet,roughness:.38,metalness:.12,emissive:0x2bd04f,emissiveMap:facet,emissiveIntensity:0});tierM.push(m);
+ const t=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,tH,96,1,true),m);t.position.y=yb+tH/2;t.castShadow=t.receiveShadow=true;dome.add(t);
+ const l=new THREE.Mesh(new THREE.CylinderGeometry(rb+1.1,rb+1.1,.4,96),ledgeM);l.position.y=yb;l.castShadow=l.receiveShadow=true;dome.add(l);
+ for(let j=0;j<96;j++){const a=j/96*2*PI,x=(rb+1.1)*Math.cos(a),z=(rb+1.1)*Math.sin(a);railP.push(x,yb+.2,z,x,yb+1.1,z)}
+ const rl=new THREE.Mesh(new THREE.TorusGeometry(rb+1.1,.05,5,96),steelM);rl.rotation.x=PI/2;rl.position.y=yb+1.1;dome.add(rl)}
+{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(railP,3));dome.add(new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0xdde3e8})))}
+{const top=y0+Ht,c=new THREE.Mesh(new THREE.CylinderGeometry(E(top)+.6,E(top)+.6,.5,48),steelM);c.position.y=top;dome.add(c);
+ const sp1=new THREE.Mesh(new THREE.CylinderGeometry(.07,.4,9,8),steelM);sp1.position.y=top+4.5;sp1.castShadow=true;dome.add(sp1);
+ const fn=new THREE.Mesh(new THREE.SphereGeometry(.35,10,8),steelM);fn.position.y=top+9;dome.add(fn)}
+// glazed base drum with V-bracing (opaque reflective glass)
+{const d=new THREE.Mesh(new THREE.CylinderGeometry(29.6,29.6,y0,128),baseM);d.position.y=y0/2;d.castShadow=true;dome.add(d);
+ const bg=[],tb=(a,b,r)=>bg.push(new THREE.TubeGeometry(new THREE.LineCurve3(a,b),1,r,5)),dd=2*PI/64,p=(a,y)=>V(29.9*Math.cos(a),y,29.9*Math.sin(a));
+ for(let j=0;j<64;j++){const a=j*dd;tb(p(a,0),p(a,y0),.2);if(j%2==0){tb(p(a,0),p(a+dd,5.2),.15);tb(p(a+2*dd,0),p(a+dd,5.2),.15)}}
+ const m=new THREE.Mesh(mergeGeometries(bg),steelM);m.castShadow=true;dome.add(m);
+ for(const y of[0,3.5,y0]){const t=new THREE.Mesh(new THREE.TorusGeometry(29.9,.22,6,128),steelM);t.rotation.x=PI/2;t.position.y=y;dome.add(t)}}
+const domeLight=new THREE.PointLight(0x2bd04f,0,130,2);domeLight.position.y=24;dome.add(domeLight);
+// ── HOTEL (Radisson Blu, agaseke ribbon façade) ──
+await pg(78,'Hotel & IT Park');
+const hotel=new THREE.Group(),HP=[-105,28];hotel.position.set(HP[0],gh(Math.hypot(...HP)),HP[1]);hotel.rotation.y=-.35;scene.add(hotel);
+const hAdd=(g,m,x,y,z)=>{const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;hotel.add(o);return o};
+hAdd(new RoundedBoxGeometry(60,22,22,3,.4),M({color:0xd9d2c5,roughness:.8}),0,11,0);
+const pal=[0x00A1DE,0xFAD201,0x20603D,0xE8A87C,0xC38D9E,0x8B5E3C,0xD4A76A].map(c=>M({color:c,metalness:.55,roughness:.28})),
+winMat=M({color:0x0b1a24,metalness:.9,roughness:.08,emissive:0xffd88a,emissiveIntensity:0}),brown=M({color:0x6b4a2f,roughness:.7});let rc=0;
+for(const s of[1,-1]){
+ for(let i=0;i<22;i++)hAdd(new THREE.BoxGeometry(1.2,22,.15),pal[rc++%7],-30+(i+.5)*60/22,11,s*(11.1+(i%2)*.14));
+ for(let i=0;i<10;i++)hAdd(new THREE.BoxGeometry(.15,22,1.2),pal[rc++%7],s*(30.1+(i%2)*.14),11,-11+(i+.5)*2.2);
+ hAdd(new THREE.BoxGeometry(58,20.5,.1),winMat,0,11.25,s*11.04);hAdd(new THREE.BoxGeometry(.1,20.5,20),winMat,s*30.04,11.25,0);
+ for(let f=1;f<6;f++)hAdd(new THREE.BoxGeometry(60.4,.3,.3),brown,0,3.6*f,s*11.2)}
+hAdd(new THREE.BoxGeometry(61,.6,23),M({color:0x8d8d8d,roughness:.9}),0,22.3,0);
+[[-20,-4,8,4,6],[-2,5,6,3,5],[14,-3,9,4,7],[22,4,5,3,5]].forEach(([x,z,w,h,d])=>hAdd(new THREE.BoxGeometry(w,h,d),M({color:0xb0b0b0,metalness:.4,roughness:.6}),x,22.6+h/2,z));
+const it=new THREE.Group();it.position.set(105,gh(108),25);scene.add(it);
+const cg=M({color:0x7e9db0,metalness:.85,roughness:.1});
+[[0,0,50,12,22],[-8,-26,34,8,16],[30,-24,8,18,8]].forEach(([x,z,w,h,d])=>{const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),cg);b.position.set(x,h/2,z);b.castShadow=b.receiveShadow=true;it.add(b);
+ for(let y=0;y<=h;y+=3){const s=new THREE.Mesh(new THREE.BoxGeometry(w+.6,.4,d+.6),conc);s.position.set(x,y,z);s.castShadow=true;it.add(s)}});
+const lamps=[];for(let i=0;i<14;i++){const a=i/14*2*PI,x=62*Math.cos(a),z=62*Math.sin(a);
+ add(new THREE.CylinderGeometry(.12,.15,4,6),steelM,x,Y0+2,z);add(new THREE.SphereGeometry(.4,10,8),M({color:0xffcc88,emissive:0xffcc88,emissiveIntensity:2}),x,Y0+4.2,z);
+ const l=new THREE.PointLight(0xffcc88,400,30,2);l.position.set(x,Y0+4.5,z);scene.add(l);lamps.push(l)}
+// ── LIGHTING PRESETS ──
+const dir=(az,el)=>{az*=PI/180;el*=PI/180;return[Math.sin(az)*Math.cos(el),Math.sin(el),Math.cos(az)*Math.cos(el)]};
+const MODES={
+ day:{sun:[100,180,80],sc:0xfff5e6,si:3.2,hs:0x87ceeb,hg:0x3a6b35,hi:.55,ac:0xa0b8d0,ai:.35,fog:0xbcd5e8,fd:.0008,ex:1.05,env:1,sky:[8,2.5,.005],lit:0,cl:[0xffffff,.55]},
+ sunset:{sun:dir(150,12),sc:0xff8c42,si:2.4,hs:0xff9060,hg:0x4a3020,hi:.4,ac:0xc09070,ai:.2,fog:0xffa575,fd:.0018,ex:1,env:.6,sky:[10,3,.005],lit:0,cl:[0xff9a70,.6]},
+ dusk:{sun:dir(230,5),sk:dir(215,-2.5),sc:0xff8a55,si:.6,hs:0x3a5a9a,hg:0x101820,hi:.5,ac:0x2a3a60,ai:.3,fog:0x3a4f78,fd:.0014,ex:1.1,env:.3,sky:[3,2.2,.01],lit:1.3,cl:[0x6a7aa8,.55]},
+ night:{sun:[-80,140,-60],sk:dir(150,-8),sc:0x4466aa,si:.3,hs:0x1a2540,hg:0x0a0e1a,hi:.12,ac:0x0a1020,ai:.15,fog:0x0a0e1a,fd:.0025,ex:.85,env:.1,sky:[2,.15,.005],lit:1.8,cl:[0x151c2e,.5]}};
+let lit=0,ledMode=0;
+function setMode(k){const m=MODES[k];lit=m.lit;
+ sun.color.setHex(m.sc);sun.intensity=m.si;sun.position.set(...m.sun).normalize().multiplyScalar(260);
+ hemi.color.setHex(m.hs);hemi.groundColor.setHex(m.hg);hemi.intensity=m.hi;amb.color.setHex(m.ac);amb.intensity=m.ai;
+ scene.fog.color.setHex(m.fog);scene.fog.density=m.fd;renderer.toneMappingExposure=m.ex;mats.forEach(x=>x.envMapIntensity=x.userData.e*m.env);
+ su.turbidity.value=m.sky[0];su.rayleigh.value=m.sky[1];su.mieCoefficient.value=m.sky[2];su.sunPosition.value.set(...(m.sk||m.sun)).normalize();
+ cloudM.color.setHex(m.cl[0]);cloudM.opacity=m.cl[1];
+ lamps.forEach(l=>l.visible=!!lit);domeLight.intensity=lit?3500:0;ledgeM.emissiveIntensity=lit?.5:0;
+ for(const g of[podM,baseM,winMat])g.emissiveIntensity=lit?1.3:0;
+ document.querySelectorAll('[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m==k))}
+document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+// LED facade: photo-accurate flag bands (blue top, yellow mid, green bottom) or 6 s cycle
+const BL=new THREE.Color(0x1e8cff),YE=new THREE.Color(0xffb81c),GR=new THREE.Color(0x2bd04f),BAND=[GR,GR,GR,YE,YE,YE,BL,BL,BL],CY=[GR,YE,BL],tmp=new THREE.Color();
+function led(now){const T=now/1000%6;
+ tierM.forEach((m,i)=>{if(!ledMode)tmp.copy(BAND[i]);else if(T<4.5)tmp.copy([BL,YE,GR][T/1.5|0]);else{const w=(((i/9*3-(T-4.5)*2)%3)+3)%3,f=w|0;tmp.copy(CY[f]).lerp(CY[(f+1)%3],w-f)}
+  m.emissive.copy(tmp);m.emissiveIntensity=lit*(1+.07*Math.sin(now/600+i))});
+ domeLight.color.copy(tierM[4].emissive)}
+$('led').onclick=e=>{ledMode^=1;e.target.textContent='LED: '+(ledMode?'Cycle':'Flag')};
+// ── CAMERA PRESETS ──
+const CAMS={'Front Approach':[[0,22,150],[0,22,0]],'Photo Match (Dusk)':[[-62,6,128],[-22,22,0]],'Dome Close-up':[[50,38,62],[0,28,0]],'Full Complex':[[170,100,200],[-10,22,0]],'Hotel Side':[[-190,40,125],[-105,14,28]],'Rear':[[0,30,-160],[0,22,0]],'Aerial':[[0,230,210],[0,0,0]],'Low Angle':[[60,5,95],[0,36,0]],'Night Hero':[[105,30,95],[0,28,0]]};
+let tw=null;
+const go=n=>{const[p,t]=CAMS[n];tw={t0:performance.now(),p0:camera.position.clone(),q0:controls.target.clone(),p1:V(...p),q1:V(...t)}};
+$('cam').innerHTML=Object.keys(CAMS).map(n=>`<option>${n}</option>`).join('');$('cam').value='Front Approach';
+$('cam').onchange=e=>{const v=e.target.value;go(v);if(v=='Night Hero')setMode('night');if(v.startsWith('Photo'))setMode('dusk')};
+$('rot').onchange=e=>controls.autoRotate=e.target.checked;
+camera.position.set(...CAMS['Front Approach'][0]);controls.target.set(...CAMS['Front Approach'][1]);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+setMode('day');led(0);await pg(100,'Ready');
+renderer.setAnimationLoop(()=>{const now=performance.now();
+ if(tw){let k=Math.min(1,(now-tw.t0)/1200);k=k<.5?4*k*k*k:1-(-2*k+2)**3/2;camera.position.lerpVectors(tw.p0,tw.p1,k);controls.target.lerpVectors(tw.q0,tw.q1,k);if(k>=1)tw=null}
+ if(lit)led(now);cloudT.offset.x+=.00003;controls.update();renderer.render(scene,camera)});
+setTimeout(()=>$('load').classList.add('h'),400);
+</script></body></html>
